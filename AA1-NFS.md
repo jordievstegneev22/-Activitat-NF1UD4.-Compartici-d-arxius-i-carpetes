@@ -783,10 +783,18 @@ sudo dpkg --configure -a
 ## Conclusió
 
 ### Avantatges
-<!-- ESCRIU AQUÍ -->
+El millor d'aquesta solució és que tot el codi està guardat al servidor i no als portàtils de cada treballador. Així l'empresa sap on són els fitxers i pot fer còpies de seguretat només del servidor. Si un portàtil es trenca o es perd, el codi no es perd.
 
 ### Limitacions
-<!-- ESCRIU AQUÍ -->
+Fent la pràctica he vist dos problemes.
+
+El primer és que el servidor deixa entrar segons la IP, i la IP es pot canviar molt fàcil. A la Fase 4 jo vaig canviar la IP del client a la 192.168.56.150 amb una comanda i el servidor ja em tractava com un altre ordinador. Una persona de dins de l'empresa podria fer el mateix per tenir més permisos.
+
+El segon és que NFSv3 no xifra res. Els fitxers van per la xarxa sense protegir, i algú que miri la xarxa podria veure el codi de l'empresa.
 
 ### Millores i recomanacions per al client
-<!-- ESCRIU AQUÍ -->
+Primer trauria el `no_root_squash` de `admin_tools` quan no faci falta. Ara qualsevol root d'un ordinador de la xarxa pot fer el que vulgui en aquesta carpeta, i treure-ho és molt fàcil.
+
+També posaria un tallafocs (`ufw`) al servidor perquè només puguin entrar les IPs dels ordinadors de l'empresa. No ho arregla tot, però fa més difícil que entri un ordinador de fora.
+
+I més endavant li recomanaria passar a NFSv4 amb Kerberos, perquè així els usuaris haurien de posar contrasenya i els fitxers anirien xifrats. Ara el client no ho vol, però li diria que sense això el sistema sempre serà una mica insegur.
