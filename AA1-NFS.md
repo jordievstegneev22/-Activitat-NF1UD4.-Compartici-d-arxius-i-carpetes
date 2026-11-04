@@ -330,9 +330,6 @@ sudo apt install nfs-common -y
 ![Instal·lació de nfs-common al client](images/f2-14-nfs-common-client.png)
 
 `nfs-common` conté les eines per muntar carpetes NFS. Al client s'instal·la juntament amb `rpcbind` i altres dependències.
-
-<!-- FALTA CAPTURA: instal·lació de nfs-common al servidor -->
-
 ### 2.12 Fitxer /etc/exports inicial
 
 ```bash
