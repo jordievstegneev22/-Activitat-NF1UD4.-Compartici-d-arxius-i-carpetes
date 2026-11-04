@@ -7,8 +7,8 @@
 3. [Fase 2. Preparació del servidor](#fase-2-preparació-del-servidor)
 4. [Fase 3. root_squash](#fase-3-root_squash)
 5. [Fase 4. rw vs ro](#fase-4-rw-vs-ro)
-6. [Incidències i decisions](#incidències-i-decisions)
-7. [Fase 5. fstab](#fase-5-fstab)
+6. [Fase 5. fstab](#fase-5-fstab)
+7. [Incidències i decisions](#incidències-i-decisions)
 8. [Conclusió](#conclusió)
 
 ## Entorn de treball
@@ -414,7 +414,14 @@ ls -l /mnt/admin_tools
 Es prova de crear un fitxer com a root al client. El `touch` dona **"Permiso denegado"** i el `ls -l` també.
 
 #### Resposta (Prova 1)
-<!-- ESCRIU AQUÍ LA TEVA RESPOSTA -->
+
+No s'ha creat cap fitxer. El motiu és `root_squash`, que NFS aplica per defecte (es veu a l'`exportfs -v` de l'apartat [2.13](#213-aplicar-i-comprovar-les-exportacions)).
+
+Amb `root_squash`, el root del client es converteix en l'usuari `nobody` (grup `nogroup`, UID 65534). És una mesura de seguretat: així el root d'un client no és root al servidor.
+
+`nobody` no és el propietari de la carpeta (`root`) ni és del grup `admins`. Per tant, compta com a "altres". La carpeta té permisos `770` i "altres" no té cap permís. Per això surt "Permiso denegado".
+
+Si la carpeta deixés escriure a "altres", el fitxer es crearia amb propietari `nobody` i grup `nogroup`.
 
 ### Prova 2. Afegir no_root_squash
 
@@ -473,7 +480,12 @@ sudo ls -l /mnt/admin_tools
 Amb `sudo`, el `ls -l` sí que funciona. Es veu que `prova2_root.txt` té propietari `root` i grup `root`.
 
 #### Resposta (Prova 2)
-<!-- ESCRIU AQUÍ LA TEVA RESPOSTA -->
+
+Sí que ha canviat. Ara el fitxer es crea i el propietari és `root root`.
+
+Amb `no_root_squash`, el servidor tracta el root del client com el root del servidor. I root no té límits de permisos.
+
+El risc és que qualsevol persona que sigui root en una màquina de la xarxa 192.168.56.0/24 és root dins d'`admin_tools`. Per això només ho he posat a `admin_tools`, i `dev_projects` continua amb `root_squash`.
 
 ---
 
@@ -579,6 +591,8 @@ sudo mount -a
 
 Es torna a posar la IP .104 i `mount -a` munta les dues carpetes de `/etc/fstab`. `df -h` mostra `admin_tools` i `dev_projects` muntades.
 
+> **Nota:** en aquest punt ja tenia afegides a `/etc/fstab` les línies de la [Fase 5](#fase-5-fstab). Per això `mount -a` munta les dues carpetes.
+
 ```bash
 ip a show enp0s8
 df -h | grep nfs
@@ -594,6 +608,92 @@ df -h | grep nfs
 - **"Sistema de archivos de solo lectura" (dev01 amb la IP .150):** el bloqueig ve de **NFS**. L'usuari sí que té permisos a la carpeta, però el servidor exporta la carpeta només en lectura (`ro`) per a aquesta IP.
 
 En resum: per poder escriure, NFS (segons la IP) i els permisos de la carpeta (segons l'usuari) han de permetre-ho tots dos.
+
+---
+
+## Fase 5. fstab
+
+### 5.1 Afegir les línies a /etc/fstab
+
+```bash
+sudo tee -a /etc/fstab > /dev/null << 'EOF'
+192.168.56.101:/srv/nfs/admin_tools /mnt/admin_tools nfs defaults,_netdev 0 0
+192.168.56.101:/srv/nfs/dev_projects /mnt/dev_projects nfs defaults,_netdev 0 0
+EOF
+```
+
+![Afegir línies a /etc/fstab](images/f5-01-fstab-afegir.png)
+
+S'afegeixen dues línies al final de `/etc/fstab` perquè les carpetes es muntin soles en arrencar. L'opció `_netdev` indica que és un recurs de xarxa i que s'ha d'esperar que la xarxa estigui activa.
+
+### 5.2 Comprovar el fitxer
+
+```bash
+cat /etc/fstab
+```
+
+![Contingut de /etc/fstab](images/f5-02-cat-fstab.png)
+
+Les dues línies noves surten al final del fitxer, després de les línies del sistema.
+
+### 5.3 Muntar i comprovar
+
+```bash
+sudo mount -a
+df -h | grep nfs
+```
+
+![mount -a i df -h](images/f5-03-mount-a-df.png)
+
+`mount -a` munta tot el que hi ha a `/etc/fstab`. Surt un avís que recomana `systemctl daemon-reload`, però no és un error. `df -h` mostra les dues carpetes NFS muntades.
+
+### 5.4 Reinici
+
+```bash
+sudo reboot
+```
+
+![Reinici del client](images/f5-04-reboot.png)
+
+Es reinicia el client per comprovar que el muntatge automàtic funciona.
+
+### 5.5 Comprovació després del reinici
+
+```bash
+df -h | grep nfs
+ls -l /mnt/admin_tools /mnt/dev_projects
+```
+
+![Comprovació després del reinici](images/f5-05-df-despres-reinici.png)
+
+Després del reinici, `df -h` mostra les dues carpetes muntades sense fer res. Per tant, `/etc/fstab` funciona. El `ls -l` amb l'usuari `usuari` dona "Permiso denegado", perquè aquest usuari no és de `devs` ni d'`admins`.
+
+### 5.6 Forçar NFSv3
+
+L'enunciat demana fer servir NFSv3. Si no s'indica la versió, Zorin munta les carpetes amb NFSv4. Per això cal afegir l'opció `nfsvers=3` a les línies de `/etc/fstab`.
+
+```bash
+sudo sed -i 's/defaults,_netdev/defaults,_netdev,nfsvers=3/' /etc/fstab
+cat /etc/fstab
+```
+
+`sed` canvia el text dins del fitxer: posa `defaults,_netdev,nfsvers=3` on hi havia `defaults,_netdev`. `cat` serveix per comprovar que les dues línies han canviat.
+
+```bash
+sudo umount /mnt/admin_tools /mnt/dev_projects
+sudo systemctl daemon-reload
+sudo mount -a
+```
+
+Es desmunten les carpetes, `systemctl daemon-reload` fa que el sistema torni a llegir `/etc/fstab` i `mount -a` les torna a muntar amb la nova opció.
+
+```bash
+nfsstat -m
+```
+
+`nfsstat -m` mostra les opcions de cada carpeta muntada. A les dues carpetes ha de sortir `vers=3`.
+
+Les proves de les fases 3 i 4 funcionen igual amb v3 i amb v4. Les opcions `rw`, `ro`, `root_squash` i `no_root_squash` les controla el servidor a `/etc/exports`.
 
 ---
 
@@ -677,65 +777,6 @@ Durant les instal·lacions vaig tenir dos problemes:
 ```bash
 sudo dpkg --configure -a
 ```
-
----
-
-## Fase 5. fstab
-
-### 5.1 Afegir les línies a /etc/fstab
-
-```bash
-sudo tee -a /etc/fstab > /dev/null << 'EOF'
-192.168.56.101:/srv/nfs/admin_tools /mnt/admin_tools nfs defaults,_netdev 0 0
-192.168.56.101:/srv/nfs/dev_projects /mnt/dev_projects nfs defaults,_netdev 0 0
-EOF
-```
-
-![Afegir línies a /etc/fstab](images/f5-01-fstab-afegir.png)
-
-S'afegeixen dues línies al final de `/etc/fstab` perquè les carpetes es muntin soles en arrencar. L'opció `_netdev` indica que és un recurs de xarxa i que s'ha d'esperar que la xarxa estigui activa.
-
-### 5.2 Comprovar el fitxer
-
-```bash
-cat /etc/fstab
-```
-
-![Contingut de /etc/fstab](images/f5-02-cat-fstab.png)
-
-Les dues línies noves surten al final del fitxer, després de les línies del sistema.
-
-### 5.3 Muntar i comprovar
-
-```bash
-sudo mount -a
-df -h | grep nfs
-```
-
-![mount -a i df -h](images/f5-03-mount-a-df.png)
-
-`mount -a` munta tot el que hi ha a `/etc/fstab`. Surt un avís que recomana `systemctl daemon-reload`, però no és un error. `df -h` mostra les dues carpetes NFS muntades.
-
-### 5.4 Reinici
-
-```bash
-sudo reboot
-```
-
-![Reinici del client](images/f5-04-reboot.png)
-
-Es reinicia el client per comprovar que el muntatge automàtic funciona.
-
-### 5.5 Comprovació després del reinici
-
-```bash
-df -h | grep nfs
-ls -l /mnt/admin_tools /mnt/dev_projects
-```
-
-![Comprovació després del reinici](images/f5-05-df-despres-reinici.png)
-
-Després del reinici, `df -h` mostra les dues carpetes muntades sense fer res. Per tant, `/etc/fstab` funciona. El `ls -l` amb l'usuari `usuari` dona "Permiso denegado", perquè aquest usuari no és de `devs` ni d'`admins`.
 
 ---
 
