@@ -470,14 +470,20 @@ Ara el `touch` com a root **no dona cap error**, per tant el fitxer es crea. El 
 
 ## Fase 4. rw vs ro
 
-El fitxer `/etc/exports` per a `dev_projects` té dues línies:
+La versió final de `/etc/exports` per a `dev_projects` té les dues exportacions en una sola línia:
 
 ```bash
-/srv/nfs/dev_projects 192.168.56.0/24(rw,sync,no_subtree_check)
-/srv/nfs/dev_projects 192.168.56.150(ro,sync,no_subtree_check)
+/srv/nfs/dev_projects 192.168.56.150(ro,sync,no_subtree_check) 192.168.56.0/24(rw,sync,no_subtree_check)
 ```
 
-Tota la xarxa té lectura i escriptura, però la IP 192.168.56.150 només té lectura.
+Tota la xarxa 192.168.56.0/24 té lectura i escriptura, però la IP 192.168.56.150 (consultors) només té lectura. Per què ho vaig posar en una sola línia s'explica a [Incidències i decisions](#5-el-servidor-rebutjava-la-ip-150).
+
+```bash
+cat /etc/exports
+sudo exportfs -v
+```
+
+<!-- FALTA CAPTURA: cat /etc/exports i sudo exportfs -v amb la línia única de dev_projects -->
 
 ### 4.1 Muntar dev_projects (IP 192.168.56.104)
 
@@ -513,72 +519,68 @@ touch /mnt/dev_projects/fitxer_admin01.txt
 
 El `touch` dona **"Permiso denegado"**. NFS permet escriure (la IP .104 té `rw`), però `admin01` no és del grup `devs` i la carpeta té permisos `770`.
 
-### 4.4 Canvi d'IP del client
-
-```bash
-sudo umount /mnt/dev_projects
-```
-
-![Desmuntatge de dev_projects](images/f4-04-umount-dev-projects.png)
-
-Primer es desmunta la carpeta.
-
-```bash
-sudo ip addr del 192.168.56.104/24 dev enp0s8
-sudo ip addr add 192.168.56.150/24 dev enp0s8
-ip a
-```
-
-![Canvi d'IP del client](images/f4-05-canvi-ip-client.png)
-
-Es treu la IP .104 de la interfície `enp0s8` i se'n posa una de nova. **Atenció:** a la captura la comanda que es veu és `sudo ip addr add 193.168.56.150/24` i `ip a` mostra `inet 193.168.56.150/24`, no `192.168.56.150`.
-
-### 4.5 Tornar a muntar i provar amb dev01
-
-```bash
-sudo mount -t nfs 192.168.56.101:/srv/nfs/dev_projects /mnt/dev_projects
-```
-
-![Muntatge de dev_projects amb la nova IP](images/f4-06-mount-dev-projects-nova-ip.png)
-
-El muntatge funciona sense errors.
-
-```bash
-su - dev01
-ls -l /mnt/dev_projects
-ls -l /mnt/dev_projects/prova_consultor.txt
-```
-
-![dev01 llegeix dev_projects](images/f4-07-dev01-llegeix.png)
-
-`dev01` pot llegir la carpeta i veu `fitxer_dev01.txt`. El fitxer `prova_consultor.txt` no existeix.
-
-<!-- FALTA CAPTURA: touch de dev01 amb l'error "Read-only file system" -->
-
-### 4.6 Tornar a posar la IP .104
+### 4.4 Canvi d'IP del client a 192.168.56.150
 
 ```bash
 sudo umount /mnt/dev_projects /mnt/admin_tools
-sudo ip addr del 192.168.56.150/24 dev enp0s8
-sudo ip addr add 192.168.56.104/24 dev enp0s8
-```
-
-![Restaurar la IP del client](images/f4-08-restaurar-ip.png)
-
-Es desmunten les carpetes i es torna a la IP original. A la captura `ip addr del` dona "Address not found" i `ip addr add` dona "Address already assigned": la IP .150 ja no hi era i la .104 ja estava posada.
-
-```bash
+sudo nmcli device set enp0s8 managed no
+sudo ip addr flush dev enp0s8
+sudo ip addr add 192.168.56.150/24 dev enp0s8
+sudo ip link set enp0s8 up
 ip a
 ```
 
-![IP del client restaurada](images/f4-09-ip-a-restaurada.png)
+![IP 192.168.56.150 al client](images/f4-04-ip-150-client.png)
 
-`enp0s8` torna a tenir `192.168.56.104/24`.
+Primer es desmunten les carpetes. Després es diu a NetworkManager que deixi de controlar `enp0s8`, s'esborren les IP de la interfície i es posa la 192.168.56.150. A la captura es veu `inet 192.168.56.150/24` a `enp0s8`.
+
+### 4.5 Muntar i provar amb dev01
+
+```bash
+sudo mount -t nfs -o vers=3 192.168.56.101:/srv/nfs/dev_projects /mnt/dev_projects
+su - dev01
+ls -l /mnt/dev_projects
+touch /mnt/dev_projects/prova_consultor.txt
+```
+
+![dev01 només pot llegir](images/f4-05-dev01-nomes-lectura.png)
+
+`dev01` pot llegir la carpeta: el `ls -l` mostra `fitxer_dev01.txt`. Però el `touch` dona **"Sistema de archivos de solo lectura"**, perquè el servidor exporta la carpeta en `ro` per a la IP .150.
+
+### 4.6 Tornar a la IP .104 i muntar-ho tot
+
+```bash
+sudo umount /mnt/dev_projects /mnt/admin_tools
+sudo ip addr flush dev enp0s8
+sudo nmcli device connect enp0s8
+```
+
+![NetworkManager torna a controlar enp0s8](images/f4-06-nmcli-connect.png)
+
+Es desmunten les carpetes, s'esborra la IP .150 i NetworkManager torna a controlar la interfície. A la captura, `nmcli` diu que el dispositiu s'ha activat correctament, i `enp0s8` encara no té cap IPv4.
+
+```bash
+sudo ip addr add 192.168.56.104/24 dev enp0s8
+sudo mount -a
+```
+
+![Muntatge amb mount -a](images/f4-07-mount-a.png)
+
+Es torna a posar la IP .104 i `mount -a` munta les dues carpetes de `/etc/fstab`. `df -h` mostra `admin_tools` i `dev_projects` muntades.
+
+```bash
+ip a show enp0s8
+df -h | grep nfs
+```
+
+![IP .104 i carpetes muntades](images/f4-08-ip-104-df.png)
+
+`enp0s8` torna a tenir `192.168.56.104/24` i les dues carpetes NFS continuen muntades.
 
 ### 4.7 Diferència entre els dos errors
 
-- **"Permission denied" (admin01):** el bloqueig ve dels **permisos locals** de la carpeta al servidor. NFS deixa escriure, però l'usuari no és del grup `devs` i la carpeta és `770`.
-- **"Read-only file system" (dev01 amb la IP .150):** el bloqueig ve de **NFS**. L'usuari sí que té permisos a la carpeta, però el servidor exporta la carpeta només en lectura (`ro`) per a aquesta IP.
+- **"Permiso denegado" (admin01):** el bloqueig ve dels **permisos locals** de la carpeta al servidor. NFS deixa escriure, però l'usuari no és del grup `devs` i la carpeta és `770`.
+- **"Sistema de archivos de solo lectura" (dev01 amb la IP .150):** el bloqueig ve de **NFS**. L'usuari sí que té permisos a la carpeta, però el servidor exporta la carpeta només en lectura (`ro`) per a aquesta IP.
 
 En resum: per poder escriure, NFS (segons la IP) i els permisos de la carpeta (segons l'usuari) han de permetre-ho tots dos.
 
@@ -588,16 +590,27 @@ En resum: per poder escriure, NFS (segons la IP) i els permisos de la carpeta (s
 
 ### 1. El grup devs ja existia amb un altre GID
 
-Al servidor el grup `devs` ja existia d'una activitat anterior amb el GID 1001 (es veu a la [captura 2.4](#24-comprovació-dusuaris-i-grups-al-servidor)). Al client tenia el GID 2001. Com que NFS fa servir els números, els dos GID han de ser iguals. Ho vaig corregir així:
+El grup `devs` ja existia al servidor d'una activitat anterior, amb el GID 1001. Ho vaig detectar en comparar les captures d'`id` i `getent` del servidor ([2.4](#24-comprovació-dusuaris-i-grups-al-servidor)) i del client ([2.6](#26-comprovació-dusuaris-i-grups-al-client)): al client `devs` tenia el GID 2001. Com que NFS fa servir els números i no els noms, els dos GID han de ser iguals.
+
+Abans de la correcció:
+
+![devs amb GID 1001 al servidor](images/inc-01-gid-devs-abans.png)
+
+Ho vaig corregir així:
 
 ```bash
 sudo groupmod -g 2001 devs
-sudo chgrp devs /srv/nfs/dev_projects
+sudo chgrp -R devs /srv/nfs/dev_projects
+sudo chgrp -R devs /home/dev01
 ```
 
-Després de canviar el GID, vaig tornar a fer `chgrp` perquè la carpeta quedés amb el grup correcte.
+`groupmod` canvia el GID del grup. Després cal fer `chgrp` perquè els fitxers que tenien el GID antic tornin a ser del grup `devs`.
 
-<!-- FALTA CAPTURA: groupmod, chgrp i getent group devs amb el GID 2001 -->
+Després de la correcció:
+
+![devs amb GID 2001 al servidor](images/inc-02-gid-devs-corregit.png)
+
+Ara `dev01` té `gid=2001(devs)`, `getent` mostra `devs:x:2001` i la carpeta `dev_projects` continua sent `root devs`.
 
 ### 2. Xarxa del client
 
@@ -609,9 +622,41 @@ L'enunciat diu que cal canviar la IP del client a 192.168.56.100. Però aquesta 
 
 ### 4. Ordre de les proves de la Fase 4
 
-Vaig fer la prova d'`admin01` **abans** de canviar la IP. Així l'error "Permission denied" només pot venir dels permisos locals, i no de la IP.
+Vaig fer la prova d'`admin01` **abans** de canviar la IP. Així l'error "Permiso denegado" només pot venir dels permisos locals, i no de la IP.
 
-### 5. Problemes amb dpkg
+### 5. El servidor rebutjava la IP .150
+
+Amb les dues exportacions de `dev_projects` en línies separades, el servidor no deixava muntar la carpeta des de la IP .150:
+
+![access denied by server](images/inc-03-access-denied.png)
+
+El ping al servidor funciona, però el `mount` dona "access denied by server", també amb l'opció `-o vers=3`.
+
+Vaig posar les dues exportacions en una sola línia (vegeu l'inici de la [Fase 4](#fase-4-rw-vs-ro)) i vaig reiniciar el servei:
+
+```bash
+sudo exportfs -f
+sudo exportfs -ra
+sudo systemctl restart nfs-kernel-server
+sudo journalctl -u nfs-mountd -n 20 --no-pager
+```
+
+![exportfs i registre de nfs-mountd](images/inc-04-exportfs-journalctl.png)
+
+`exportfs -f` buida la memòria d'exportacions del servidor i `exportfs -ra` les torna a carregar. Al registre de `nfs-mountd` surt "authenticated mount request from 192.168.56.150", és a dir, el servidor ja accepta el muntatge des d'aquesta IP.
+
+### 6. IP mal escrita a la primera prova
+
+La primera vegada que vaig fer la Fase 4 vaig escriure malament la IP: `193.168.56.150` en lloc de `192.168.56.150`. Per això vaig haver de repetir la prova del canvi d'IP.
+
+### 7. NetworkManager tornava a posar la IP .104
+
+A Zorin, NetworkManager tornava a posar sola la IP .104 a `enp0s8`. Ho vaig solucionar així:
+
+- Durant la prova, `sudo nmcli device set enp0s8 managed no`, perquè NetworkManager deixés de controlar la interfície.
+- En acabar, `sudo nmcli device connect enp0s8`, perquè la tornés a controlar.
+
+### 8. Problemes amb dpkg
 
 Durant les instal·lacions vaig tenir dos problemes:
 
@@ -621,8 +666,6 @@ Durant les instal·lacions vaig tenir dos problemes:
 ```bash
 sudo dpkg --configure -a
 ```
-
-<!-- FALTA CAPTURA: errors de dpkg -->
 
 ---
 
