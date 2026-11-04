@@ -39,7 +39,11 @@ Les dues màquines tenen dos adaptadors de xarxa:
 - Adaptador 1: **NAT**, per tenir accés a Internet.
 - Adaptador 2: **Només amfitrió** (*host-only*), perquè el servidor i el client es vegin entre ells a la xarxa 192.168.56.0/24.
 
-<!-- FALTA CAPTURA: configuració de xarxa de VirtualBox (servidor i client) -->
+![Xarxa de VirtualBox del servidor](images/f1-00a-xarxa-virtualbox-servidor.png)
+
+![Xarxa de VirtualBox del client](images/f1-00b-xarxa-virtualbox-client.png)
+
+A l'apartat "Xarxa" de les dues màquines es veu l'adaptador 1 a "Xarxa NAT" (`NatNetwork`) i l'adaptador 2 a "Adaptador de només l'amfitrió".
 
 ### 1.2 Hostname del servidor
 
@@ -121,7 +125,9 @@ ip a
 
 La comanda mostra les interfícies de xarxa. El client té `10.0.2.3` a `enp0s3` (NAT) i `192.168.56.104` a `enp0s8` (només amfitrió).
 
-<!-- FALTA CAPTURA: ip a al servidor (10.0.2.5 i 192.168.56.101) -->
+![Adreces IP del servidor](images/f1-09b-ip-a-servidor.png)
+
+El servidor té `10.0.2.5` a `enp0s3` (NAT) i `192.168.56.101` a `enp0s8` (només amfitrió).
 
 ### 1.7 Ping a Internet
 
@@ -458,7 +464,13 @@ ls -l /mnt/admin_tools
 
 Ara el `touch` com a root **no dona cap error**, per tant el fitxer es crea. El `ls -l` sense `sudo` dona "Permiso denegado", perquè l'usuari `usuari` no és del grup `admins`.
 
-<!-- FALTA CAPTURA: sudo ls -l /mnt/admin_tools (o ls -l al servidor) que mostri que prova2_root.txt és de root -->
+```bash
+sudo ls -l /mnt/admin_tools
+```
+
+![prova2_root.txt és de root](images/f3-08-ls-prova2-root.png)
+
+Amb `sudo`, el `ls -l` sí que funciona. Es veu que `prova2_root.txt` té propietari `root` i grup `root`.
 
 #### Resposta (Prova 2)
 <!-- ESCRIU AQUÍ LA TEVA RESPOSTA -->
@@ -480,7 +492,9 @@ cat /etc/exports
 sudo exportfs -v
 ```
 
-<!-- FALTA CAPTURA: cat /etc/exports i sudo exportfs -v amb la línia única de dev_projects -->
+![/etc/exports final i exportfs -v](images/f4-00-exports-final.png)
+
+`cat` mostra `dev_projects` en una sola línia, amb `ro` per a la IP .150 i `rw` per a la xarxa 192.168.56.0/24. `exportfs -v` confirma que el servidor aplica `ro` a 192.168.56.150 i `rw` a la resta de la xarxa.
 
 ### 4.1 Muntar dev_projects (IP 192.168.56.104)
 
