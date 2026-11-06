@@ -341,6 +341,7 @@ sudo apt install nfs-common -y
 ![Instal·lació de nfs-common al client](images/f2-14-nfs-common-client.png)
 
 `nfs-common` conté les eines per muntar carpetes NFS. Al client s'instal·la juntament amb `rpcbind` i altres dependències.
+
 ### 2.12 Fitxer /etc/exports inicial
 
 ```bash
@@ -682,6 +683,8 @@ sudo sed -i 's/defaults,_netdev/defaults,_netdev,nfsvers=3/' /etc/fstab
 cat /etc/fstab
 ```
 
+![fstab amb nfsvers=3](images/f5-06-fstab-nfsvers3.png)
+
 `sed` canvia el text dins del fitxer: posa `defaults,_netdev,nfsvers=3` on hi havia `defaults,_netdev`. `cat` serveix per comprovar que les dues línies han canviat.
 
 ```bash
@@ -696,7 +699,9 @@ Es desmunten les carpetes, `systemctl daemon-reload` fa que el sistema torni a l
 nfsstat -m
 ```
 
-`nfsstat -m` mostra les opcions de cada carpeta muntada. A les dues carpetes ha de sortir `vers=3`.
+![nfsstat amb vers=3](images/f5-07-nfsstat-vers3.png)
+
+`nfsstat -m` mostra les opcions de cada carpeta muntada. Les dues carpetes surten amb `vers=3`.
 
 Les proves de les fases 3 i 4 funcionen igual amb v3 i amb v4. Les opcions `rw`, `ro`, `root_squash` i `no_root_squash` les controla el servidor a `/etc/exports`.
 
@@ -782,65 +787,6 @@ Durant les instal·lacions vaig tenir dos problemes:
 ```bash
 sudo dpkg --configure -a
 ```
-
----
-
-## Fase 5. fstab
-
-### 5.1 Afegir les línies a /etc/fstab
-
-```bash
-sudo tee -a /etc/fstab > /dev/null << 'EOF'
-192.168.56.101:/srv/nfs/admin_tools /mnt/admin_tools nfs defaults,_netdev 0 0
-192.168.56.101:/srv/nfs/dev_projects /mnt/dev_projects nfs defaults,_netdev 0 0
-EOF
-```
-
-![Afegir línies a /etc/fstab](images/f5-01-fstab-afegir.png)
-
-S'afegeixen dues línies al final de `/etc/fstab` perquè les carpetes es muntin soles en arrencar. L'opció `_netdev` indica que és un recurs de xarxa i que s'ha d'esperar que la xarxa estigui activa.
-
-### 5.2 Comprovar el fitxer
-
-```bash
-cat /etc/fstab
-```
-
-![Contingut de /etc/fstab](images/f5-02-cat-fstab.png)
-
-Les dues línies noves surten al final del fitxer, després de les línies del sistema.
-
-### 5.3 Muntar i comprovar
-
-```bash
-sudo mount -a
-df -h | grep nfs
-```
-
-![mount -a i df -h](images/f5-03-mount-a-df.png)
-
-`mount -a` munta tot el que hi ha a `/etc/fstab`. Surt un avís que recomana `systemctl daemon-reload`, però no és un error. `df -h` mostra les dues carpetes NFS muntades.
-
-### 5.4 Reinici
-
-```bash
-sudo reboot
-```
-
-![Reinici del client](images/f5-04-reboot.png)
-
-Es reinicia el client per comprovar que el muntatge automàtic funciona.
-
-### 5.5 Comprovació després del reinici
-
-```bash
-df -h | grep nfs
-ls -l /mnt/admin_tools /mnt/dev_projects
-```
-
-![Comprovació després del reinici](images/f5-05-df-despres-reinici.png)
-
-Després del reinici, `df -h` mostra les dues carpetes muntades sense fer res. Per tant, `/etc/fstab` funciona. El `ls -l` amb l'usuari `usuari` dona "Permiso denegado", perquè aquest usuari no és de `devs` ni d'`admins`.
 
 ---
 
