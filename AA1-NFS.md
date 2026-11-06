@@ -193,7 +193,7 @@ sudo groupadd -g 2002 admins
 
 ![groupadd al servidor](images/f2-01-groupadd-servidor.png)
 
-La comanda crea un grup amb un GID concret. Al servidor surt que els dos grups ja existeixen, perquè venien d'una activitat anterior (vegeu [Incidències i decisions](#incidències-i-decisions)).
+La comanda crea un grup amb un GID concret. Només el grup `devs` ja existia d'una activitat anterior (vegeu [Incidències i decisions](#incidències-i-decisions)). El grup `admins` es crea correctament.
 
 ### 2.2 Crear els usuaris al servidor
 
@@ -204,7 +204,7 @@ sudo useradd -m -u 3002 -g admins -s /bin/bash admin01
 
 ![useradd al servidor](images/f2-02-useradd-servidor.png)
 
-`useradd` crea l'usuari amb el seu UID, el grup principal i la shell. Al servidor els usuaris també ja existien.
+`useradd` crea l'usuari amb el seu UID, el grup principal i la shell. `dev01` i `admin01` es creen correctament, sense errors.
 
 ### 2.3 Contrasenyes al servidor
 
