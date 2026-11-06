@@ -99,21 +99,22 @@ Es torna a configurar el teclat. A la primera captura es tria el model "Generic 
 locale
 ```
 
-![Comprovació de l'idioma al servidor](images/f1-07-locale-servidor.png)
+![Comprovació de l'idioma al servidor](images/f1-07-locale-ca-servidor.png)
 
-La comanda mostra l'idioma actual. A la captura encara surt `es_ES.UTF-8`, perquè el canvi s'aplica quan es torna a iniciar la sessió.
-
-Més endavant, la sortida de les comandes del servidor ja surt en català (per exemple, a la captura de l'`apt upgrade`).
+La comanda mostra l'idioma actual. Totes les variables surten amb `ca_ES.UTF-8`, per tant el servidor ja està en català.
 
 ### 1.5 Idioma del client
 
 ```bash
+sudo locale-gen ca_ES.UTF-8
+sudo update-locale LANG=ca_ES.UTF-8
+sudo reboot
 locale
 ```
 
-![Comprovació de l'idioma al client](images/f1-08-locale-client.png)
+![Canvi de l'idioma al client](images/f1-08-locale-ca-client.png)
 
-Al client l'idioma és `es_ES.UTF-8`. També surten avisos de `Cannot set LC_CTYPE`, perquè el locale per defecte no està generat.
+`locale-gen` genera l'idioma català i `update-locale` el posa com a idioma per defecte. Després vaig reiniciar el client i hi vaig tornar a entrar per SSH. Ara `locale` mostra `ca_ES.UTF-8` a totes les variables, sense cap avís.
 
 ### 1.6 Adreces IP
 
@@ -174,6 +175,10 @@ Al servidor tots els paquets ja estan actualitzats (0 paquets per actualitzar).
 ![Actualització del client](images/f1-15-apt-upgrade-client.png)
 
 Al client es veu que hi ha 218 paquets per actualitzar i que comença l'actualització.
+
+![Final de l'actualització del client](images/f1-16-apt-upgrade-client-final.png)
+
+Al final de l'actualització es configuren els últims paquets i es regenera l'`initrd`. No surt cap error. Després del reinici, en entrar per SSH surt "Se pueden aplicar 0 actualizaciones de forma inmediata" (es veu a la captura de l'apartat 1.5).
 
 ---
 
@@ -736,6 +741,28 @@ ls -l /mnt/admin_tools /mnt/dev_projects
 ![Comprovació després del reinici](images/f5-05-df-despres-reinici.png)
 
 Després del reinici, `df -h` mostra les dues carpetes muntades sense fer res. Per tant, `/etc/fstab` funciona. El `ls -l` amb l'usuari `usuari` dona "Permiso denegado", perquè aquest usuari no és de `devs` ni d'`admins`.
+
+### 5.6 Forçar NFSv3
+
+```bash
+sudo sed -i 's/defaults,_netdev/defaults,_netdev,nfsvers=3/' /etc/fstab
+cat /etc/fstab
+```
+
+![fstab amb nfsvers=3](images/f5-06-fstab-nfsvers3.png)
+
+`sed` afegeix l'opció `nfsvers=3` a les dues línies NFS de `/etc/fstab`. Amb aquesta opció el client sempre munta les carpetes amb la versió 3 de NFS.
+
+```bash
+sudo umount /mnt/admin_tools /mnt/dev_projects
+sudo systemctl daemon-reload
+sudo mount -a
+nfsstat -m
+```
+
+![nfsstat amb vers=3](images/f5-07-nfsstat-vers3.png)
+
+Es desmunten les carpetes, `systemctl daemon-reload` fa que systemd llegeixi el nou `/etc/fstab` i `mount -a` les torna a muntar. `nfsstat -m` mostra les opcions de cada muntatge: les dues carpetes surten amb `vers=3`.
 
 ---
 
